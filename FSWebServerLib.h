@@ -103,6 +103,8 @@ public:
 	AsyncFSWebServer& setJSONCallback(JSON_CALLBACK_SIGNATURE);
 	AsyncFSWebServer& setRESTCallback(REST_CALLBACK_SIGNATURE);
 	AsyncFSWebServer& setPOSTCallback(POST_CALLBACK_SIGNATURE);
+  void setUSERVERSION(String Version);
+ 
 	bool save_user_config(String name, String value);
 	bool load_user_config(String name, String &value);
 	bool save_user_config(String name, int value);
