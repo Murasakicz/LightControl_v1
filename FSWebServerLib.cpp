@@ -14,6 +14,8 @@ const char Page_Restart[] PROGMEM = R"=====(
 Please Wait....Configuring and Restarting.
 )=====";
 
+String _Version = "0.00a";
+
 AsyncFSWebServer::AsyncFSWebServer(uint16_t port) : AsyncWebServer(port) {}
 
 /*void AsyncFSWebServer::secondTick()
@@ -668,8 +670,7 @@ void AsyncFSWebServer::handle() {
 void AsyncFSWebServer::configureWifiAP() {
     DEBUGLOG(__PRETTY_FUNCTION__);
     DEBUGLOG("\r\n");
-    
-    //WiFi.disconnect();    
+    //WiFi.disconnect();
     WiFi.mode(WIFI_AP);
     String APname = _apConfig.APssid + (String)ESP.getChipId();
     if (_httpAuth.auth) {
@@ -701,10 +702,23 @@ void AsyncFSWebServer::configureWifi() {
     //delay(2000);
     //delay(5000); // Wait for WiFi
 
-    while (!WiFi.isConnected()) {
-        delay(1000);
-        DBG_OUTPUT_PORT.print(".");
-    }
+	//remove unreliable wifi connection process SPECIES5618 2018-02-06 
+    //while (!WiFi.isConnected()) {
+    //    delay(1000);
+    //    DBG_OUTPUT_PORT.print(".");
+    //}
+
+//more rlieable wifi connection hold process SPECIES5618 2018-02-06 
+	DBG_OUTPUT_PORT.print("Attemping WiFi");
+	while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+
+		delay(3000);
+		DBG_OUTPUT_PORT.print("*");
+		WiFi.begin(_config.ssid.c_str(), _config.password.c_str());
+		WiFi.reconnect();
+	}
+
+
     DBG_OUTPUT_PORT.println();
     /*if (WiFi.isConnected()) {
         currentWifiStatus = WIFI_STA_CONNECTED;
@@ -924,8 +938,9 @@ void AsyncFSWebServer::handleFileUpload(AsyncWebServerRequest *request, String f
 
 void AsyncFSWebServer::send_general_configuration_values_html(AsyncWebServerRequest *request) {
     String values = "";
-    values += "devicename|" + (String)_config.deviceName + "|input\n";
-    request->send(200, "text/plain", values);
+	values += "devicename|" + (String)_config.deviceName + "|input\n";
+	values += "userversion|" + _Version + "|div\n";
+	request->send(200, "text/plain", values);
     DEBUGLOG(__FUNCTION__);
     DEBUGLOG("\r\n");
 }
@@ -1399,8 +1414,6 @@ void AsyncFSWebServer::send_update_firmware_values_html(AsyncWebServerRequest *r
     bool updateOK = maxSketchSpace < ESP.getFreeSketchSpace();
     StreamString result;
     Update.printError(result);
-
-    if (!updateOK) Serial.println("Sketch to big");
     DEBUGLOG("--MaxSketchSpace: %d\n", maxSketchSpace);
     DEBUGLOG("--Update error = %s\n", result.c_str());
     values += "remupd|" + (String)((updateOK) ? "OK" : "ERROR") + "|div\n";
@@ -1555,9 +1568,9 @@ void AsyncFSWebServer::post_rest_config(AsyncWebServerRequest *request) {
 
 	for (uint8_t i = 0; i < request->args(); i++) {
 		DEBUGLOG("Arg %d: %s\r\n", i, request->arg(i).c_str());
-		DEBUGLOG(request->argName(i));
+		DEBUGLOG(request->argName(i).c_str());
 		DEBUGLOG(" : ");
-		DEBUGLOG(urldecode(request->arg(i)));
+		DEBUGLOG(urldecode(request->arg(i)).c_str());
 
 		//check for post redirect
 		if (request->argName(i) == "afterpost")
@@ -1599,7 +1612,7 @@ void AsyncFSWebServer::serverInit() {
         if (!this->checkAuth(request))
             return request->requestAuthentication();
         this->handleFileCreate(request);
-    });  //delete file
+    });	//delete file
     on("/edit", HTTP_DELETE, [this](AsyncWebServerRequest *request) {
         if (!this->checkAuth(request))
             return request->requestAuthentication();
@@ -1743,46 +1756,65 @@ void AsyncFSWebServer::serverInit() {
         this->updateFirmware(request, filename, index, data, len, final);
     });
 
-  on("/rconfig", HTTP_GET, [this](AsyncWebServerRequest *request) {
-    if (!this->checkAuth(request))
-      return request->requestAuthentication();
-    this->handle_rest_config(request);
-  });
+	on("/rconfig", HTTP_GET, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		this->handle_rest_config(request);
+	});
 
-  on("/pconfig", HTTP_POST, [this](AsyncWebServerRequest *request) {
-    if (!this->checkAuth(request))
-      return request->requestAuthentication();
-    this->post_rest_config(request);
-  });
+	on("/pconfig", HTTP_POST, [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		this->post_rest_config(request);
+	});
 
 
-  on("/json", [this](AsyncWebServerRequest *request) {
-    if (!this->checkAuth(request))
-      return request->requestAuthentication();
-    if (jsoncallback)
-    {
-      this->jsoncallback(request);
-    }
-  });
+	on("/json", [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		if (jsoncallback)
+		{
+			this->jsoncallback(request);
+		}
+		else
+		{
+			String values = "";
+			request->send(200, "text/plain", values);
+		    values = "";
+		}
+	});
 
-  on("/rest", [this](AsyncWebServerRequest *request) {
-    if (!this->checkAuth(request))
-      return request->requestAuthentication();
-    if (restcallback)
-    {
-      this->restcallback(request);
-    }
-  });
+	on("/rest", [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		if (restcallback)
+		{
+			this->restcallback(request);
+		}
+				else
+		{
+			String values = "";
+			request->send(200, "text/plain", values);
+		    values = "";
+		}
 
-  on("/post", [this](AsyncWebServerRequest *request) {
-    if (!this->checkAuth(request))
-      return request->requestAuthentication();
-    if (postcallback)
-    {
-      this->postcallback(request);
-    }
-  });
+	});
 
+	on("/post", [this](AsyncWebServerRequest *request) {
+		if (!this->checkAuth(request))
+			return request->requestAuthentication();
+		if (postcallback)
+		{
+			this->postcallback(request);
+		}
+				else
+		{
+			String values = "";
+			request->send(200, "text/plain", values);
+		    values = "";
+		}
+
+	});
 
     //called when the url is not defined here
     //use it to load content from SPIFFS
@@ -1887,6 +1919,8 @@ AsyncFSWebServer& AsyncFSWebServer::setPOSTCallback(POST_CALLBACK_SIGNATURE) {
 	return *this;
 }
 
-String AsyncFSWebServer::getDeviceName(){
-  return _config.deviceName;
+void AsyncFSWebServer::setUSERVERSION(String Version) {
+	_Version = Version;
 }
+
+
